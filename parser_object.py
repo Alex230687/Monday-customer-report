@@ -5,67 +5,15 @@ from decorator import deco_page, deco_tags
 
 
 class BaseParser:
-    """
-    Родительский класс BaseParser.
+    """Родительский класс BaseParser."""
 
-    Атрибуты:
-        ERROR - словарь данных об ошибках
-
-    Методы:
-        error(error_page, error_type, error_text) - данные об исключении
-        auth() - авторизация на сайте
-        sales() - загрузка отчета продаж
-        rests() - загрузка
-        run_all() - запуск авторизации, загрузка продаж и остатков
-        run_sales() - запуск авторизации, загрузка продаж
-    """
-    ERROR = dict()
-
-    def __init__(self, settings, driver_object, period, counter):
-        """
-        Конструктор класса BaseParser. Принимает блок настроек, период и счетчик.
-
-        :param settings: - блок основных настроек парсера <class dict>
-            CUSTOMER - наименование контрагента
-            UD - данные авторизации
-                LOGIN - логин
-                PWD - пароль
-            PAGE - ключевые страницы
-                AUTH_PAGE - страница авторизации
-                SALES_PAGE - страница продаж
-                RESTS_PAGE - страница остатков
-            AUTH - теги авторизации
-            SALES - теги отчета продаж
-            RESTS - теги отчета остатков
-
-        :param driver_object: - блок настроек вебдрайвера
-            PATH - путь к файлу драйвера chromedriver.exe
-            SPEED - определение pageLoadStrategy
-            DOWNLOAD - директория загруки файлов
-
-        :param period: - период отчета
-            DATE_START - datetime.date(year, month, day)
-            DATE_END - datetime.date(year, month, day)
-
-        :param counter: - глобальный счетчит itertools.count()
-
-        Атрибуты:
-            elements() - словарь определённых и загруженных элементов DOM
-        """
+    def __init__(self, settings, driver_object, period):
+        """Конструктор класса BaseParser. Принимает блок настроек, период и счетчик."""
         self.settings = settings
         self.driver = driver_object()
         self.period = period
-        self.counter = counter
         self.elements = dict()
-
-    def error(self, error_page, error_type, error_text):
-        """Метод записывает инфорацию об исключении в атрибут класса ERROR."""
-        self.__class__.ERROR[str(next(self.counter))] = {
-            'CUSTOMER': self.settings['CUSTOMER'],
-            'ERROR_PAGE': error_page,
-            'ERROR_TYPE': error_type,
-            'ERROR_TEXT': error_text,
-        }
+        self.message = []
 
     def run_all(self):
         """Метод запускает полный цикл автризации и загрузки отчетов."""
@@ -83,7 +31,7 @@ class BaseParser:
     def run_rests(self):
         """Метод запускает цикл авторизции и выгрузки отчета остатков."""
         self.auth()(self)
-        self.sales()(self)
+        self.rests()(self)
         self.driver.quit()
 
     def auth(self):
@@ -94,7 +42,7 @@ class BaseParser:
         password = self.settings['UD']['PWD']
 
         @deco_page(loaded_page)
-        @deco_tags(loaded_page, loaded_tags)
+        @deco_tags(loaded_tags)
         def auth_chain(self):
             """Метод запускает цепочку событий авторизации."""
             actions = ActionChains(self.driver)
@@ -114,7 +62,7 @@ class BaseParser:
         loaded_tags = self.settings['SALES']
 
         @deco_page(loaded_page)
-        @deco_tags(loaded_page, loaded_tags)
+        @deco_tags(loaded_tags)
         def sales_chain(self):
             """Метод запускает цепочку событий выгрузки отчета продаж."""
             actions = ActionChains(self.driver)
@@ -131,7 +79,7 @@ class BaseParser:
         loaded_tags = self.settings['RESTS']
 
         @deco_page(loaded_page)
-        @deco_tags(loaded_page, loaded_tags)
+        @deco_tags(loaded_tags)
         def rests_chain(self):
             """Метод запускает цепочку событий выгрузки отчета остатков."""
             actions = ActionChains(self.driver)
@@ -149,14 +97,7 @@ class ParserTypeOne(BaseParser):
 
 
 class ParserTypeTwo(BaseParser):
-    """
-    Производный класс для определения типа парсера N2.
-
-    Настройки парсера определённые конструктором базового класса
-    дополняются вспомогательными элементами:
-    SUB_TAGS - дополнительные элементы DOM для формирования отчета
-    EXCEL_BTN - дполнительные элементы DOM для выгрузки файла
-    """
+    """Производный класс для определения типа парсера N2."""
     def sales(self):
         """Переопредел метод родительского класса."""
         loaded_page = self.settings['PAGE']['SALES_PAGE']
@@ -167,7 +108,7 @@ class ParserTypeTwo(BaseParser):
         date_end = self.period['DATE_END']
 
         @deco_page(loaded_page)
-        @deco_tags(loaded_page, loaded_tags)
+        @deco_tags(loaded_tags)
         def sales_chain(self):
             """Метод запускает цепочку событий запроса страницы отчета продаж."""
             for key in ('START_DD', 'START_MM', 'START_YYYY', 'END_DD', 'END_MM', 'END_YYYY'):
@@ -186,7 +127,7 @@ class ParserTypeTwo(BaseParser):
             actions.pause(5)
             actions.perform()
 
-            @deco_tags(loaded_page, excel_tag)
+            @deco_tags(excel_tag)
             def sub_sales_chain(self):
                 """Метод запускает цепочку событий выгрузки отчета продаж."""
                 sub_actions = ActionChains(self.driver)
@@ -207,7 +148,7 @@ class ParserTypeTwo(BaseParser):
         excel_tag = self.settings['EXCEL_BTN']
 
         @deco_page(loaded_page)
-        @deco_tags(loaded_page, loaded_tags)
+        @deco_tags(loaded_tags)
         def rests_chain(self):
             """Метод запускает цепочку событий запроса страницы отчета остатков."""
             actions = ActionChains(self.driver)
@@ -218,7 +159,7 @@ class ParserTypeTwo(BaseParser):
             actions.pause(5)
             actions.perform()
 
-            @deco_tags(loaded_page, excel_tag)
+            @deco_tags(excel_tag)
             def sub_rests_chain(self):
                 """Метод запускает цепочку событий выгрузки отчета остатков."""
                 sub_actions = ActionChains(self.driver)
@@ -230,3 +171,6 @@ class ParserTypeTwo(BaseParser):
             sub_rests_chain(self)
 
         return rests_chain
+
+
+parser_types = {'1': ParserTypeOne, '2': ParserTypeTwo}

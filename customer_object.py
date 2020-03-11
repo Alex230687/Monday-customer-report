@@ -1,122 +1,58 @@
-"""Модуль содержит классы BaseCustomer, Md, Mg, Ms, Bg."""
+"""Модуль содержит класс Customer."""
 import time
-from MD.settings import MD_SETTINGS
-from MS.settings import MS_SETTINGS
-from MG.settings import MG_SETTINGS
-from BG.settings import BG_SETTINGS
 from driver_object import Driver
-from parser_object import ParserTypeOne, ParserTypeTwo
+from parser_object import parser_types
 from file_object import File
 
 
-class BaseCustomer:
-    """
-    Базовый класс. Определяет основную структуру производных классов.
+class Customer:
+    """Класс Customer."""
 
-    Атрибуты:
-        SETTINGS - общий блок настроек по контрагента
-    Методы:
-        run_parser() - запуск программы выгрузки отчетных файлов
-        get_data_from_file() - получение данных из выгруженных файлов
-        run_program() - общий запуск выгруки и получения данных из файлов
-    """
-    SETTINGS = None
-
-    def __init__(self, period, counter, period_id):
+    def __init__(self, settings, period, period_id):
         """
-        Конструктор принимает аргументы period, counterm period_id.
+        Конструктор класса Customer
 
-        :param period: период отчета
-            DATE_START - datetime.date(year, month, day)
-            DATE_END -  datetime.date(year, month, day)
+        settings - принимает общий блок настроек контрагента
+        period - dict() объектов datetime.date(year, month, day)
+        period_id - int() значения для записи в поле НомерПериода
 
-        :param counter: глобальный счетчик itertools.count()
-        :param period_id: номер текущего периода для SQL
-
-        Атрибуты:
-            driver - объект selenium.webdriver.Chrome()
-            file - объект для работы с файлами отчетов
+        parser_cls - dict() классов прасера
+        driver - объект вебдрайвера
+        file - объект класса File
+        message - блок сообщений программы
         """
+        self.settings = settings
         self.period = period
-        self.counter = counter
-        self.driver = Driver(settings=self.__class__.SETTINGS['DRIVER'])
-        self.file = File(
-            settings=self.__class__.SETTINGS['FILE'],
-            period=self.period,
-            counter=self.counter,
-            period_id=period_id
-        )
+        self.parser_cls = parser_types[str(self.settings['PARSER']['TYPE'])]
+        self.driver = Driver(settings=self.settings['DRIVER'])
+        self.file = File(settings=self.settings['FILE'], period=self.period, period_id=period_id)
+        self.message = []
 
-    def run_program(self):
-        """Метод запускает выгрузки отчетов из ЛК и получает их данные."""
-        self.run_parser()
+    def run_program(self, register):
+        """Метода запускает основной блок программы."""
+        self.run_parser(register)
         time.sleep(5)
         self.get_data_from_file()
+        self.message += self.file.message
 
-    def run_parser(self):
-        """Метод запускает программу выгрузки отчетов из ЛК."""
-        parser = ParserTypeOne(
-            settings=self.__class__.SETTINGS['PARSER'],
-            driver_object=self.driver,
-            period=self.period,
-            counter=self.counter
-        )
-        parser.run_all()
+    def run_parser(self, register):
+        """
+        Метод запуска парсера.
+
+        Принимает строковое представление регистра БД ('ALL', 'SALES', 'RESTS')
+        1. Создание объекта парсера
+        2. Запуск блока парсера по преданному регистру
+        """
+        parser = self.parser_cls(settings=self.settings['PARSER'], driver_object=self.driver,
+                             period=self.period,)
+        if register == 'ALL':
+            parser.run_all()
+        elif register == 'SALES':
+            parser.run_sales()
+        elif register == 'RESTS':
+            parser.run_rests()
+        self.message += parser.message
 
     def get_data_from_file(self):
         """Метод получает данные из файлов."""
         self.file.run_file_program()
-
-
-class Md(BaseCustomer):
-    """
-    Производный класс от BaseCustomer.
-
-    Переопределён атрибут SETTINGS
-    """
-    SETTINGS = MD_SETTINGS
-
-
-class Mg(BaseCustomer):
-    """
-    Производный класс от BaseCustomer.
-
-    Переопределён атрибут SETTINGS
-    """
-    SETTINGS = MG_SETTINGS
-
-
-class Ms(BaseCustomer):
-    """
-    Производный класс от BaseCustomer.
-
-    Переопределён атрибут SETTINGS
-    """
-    SETTINGS = MS_SETTINGS
-
-
-class Bg(BaseCustomer):
-    """
-    Производный класс от BaseCustomer.
-
-    Переопределён атрибут SETTINGS
-    Переопределён метод run_parser()
-    """
-    SETTINGS = BG_SETTINGS
-
-    def run_parser(self):
-        """
-        Переопределён метод базового класса.
-
-        Изменён тип используемого парсера на ParserTypeTwo
-        """
-        parser = ParserTypeTwo(
-            settings=self.__class__.SETTINGS['PARSER'],
-            driver_object=self.driver,
-            period=self.period,
-            counter=self.counter
-        )
-        parser.run_all()
-
-
-CLASS_LIST = [Md, Mg, Ms, Bg,]

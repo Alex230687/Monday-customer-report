@@ -1,80 +1,78 @@
-"""Модуль содержит классс Sql"""
+"""Modul contains Sql class"""
+from collections import namedtuple
 import pyodbc
+
+
+CheckTup = namedtuple('CheckTup', ['PERIOD_ID', 'DATE_START'])
 
 
 class Sql:
     """
-    Класс Sql.
+    Класс Sql. Обработка SQL запросов с БД MS SQL.
 
-    АРИБУТЫ:
-        ERROR - словарь для сбора данных о перехваченных исключениях
-
-    МЕТОДЫ:
-        error() - обработка ошибок
-        create_connection() - создание соединения
-        close_connection() - закрытие соединения
-        get_period_id() - получение номера периода
-        insert_values() - загрузка данных в SQL
+    create_connections() - создание подключения
+    close_connections() - закрытие подключения
+    existence_check() - проверка существования данных в БД
+    insert_value() - загрука данных в БД
     """
-    ERROR = dict()
 
-    def __init__(self, settings, counter):
+    def __init__(self, settings):
         """
-        Конструктор принимает аргументы settings, period, counter, period_id.
+        Sql class constructor.
 
-        :param settings: блок основных настроек MS SQL
-            SETTINGS - настройки подключения
-                DRIVER, SERVER, DATABASE, UID, PWD
-            TABLE - таблица БД для загруки отчетов
-
-        :param counter: - глобальный счетчик itertools.count()
+        settings - блок настроек SQL (настройки соединения, таблица данных)
         """
         self.settings = settings
-        self.counter = counter
         self.connection = None
         self.cursor = None
-        self.period_id = None
-
-    def error(self, error_query, error_type, error_text, error_data=None):
-        """Метод добавляет в атрибут класса данные об исключении."""
-        self.__class__.ERROR[str(next(self.counter))] = {
-            'ERROR_QUERY': error_query,
-            'ERROR_TYPE': error_type,
-            'ERROR_TEXT': error_text,
-            'ERROR_DATA': error_data
-        }
+        self.check = CheckTup(0, 0)
+        self.message = []
 
     def create_connection(self):
-        """Метод создает объект подключения и курсора."""
+        """Метод создания текущего соединения."""
         self.connection = pyodbc.connect(**self.settings['SETTINGS'])
         self.cursor = self.connection.cursor()
 
     def close_connection(self):
-        """Метод закрывает текущее соединение."""
+        """Метод закрытия текущего соединения."""
         self.cursor.close()
         self.connection.close()
 
-    def get_period_id(self):
-        """Метод получает максимальный период из БД и добавляет к нему 1."""
+    def existence_check(self, customer, register):
+        """
+        Метод для проверки существования данных в БД.
+
+        Принимает имя контрагента и регистра в БД
+        1. Получает максимальный номер периода и соответсвующую ему дату начала
+        """
+        self.check = CheckTup(0, 0)
+        query = """
+            SELECT A.НомерПериода, B.Дата_начало
+            FROM {0} AS A
+            INNER JOIN {0} AS B 
+            ON A.НомерПериода = B.НомерПериода
+            WHERE A.Партнер='{1}' AND A.Регистр='{2}' AND
+            A.НомерПериода=(SELECT MAX(НомерПериода) FROM {0} WHERE Партнер='{1}' AND Регистр='{2}')
+            GROUP BY A.НомерПериода, B.Дата_начало
+        """.format(self.settings['TABLE'], customer, register)
         if self.connection and self.cursor:
-            query = "SELECT MAX(НомерПериода) as mpid FROM %s" % self.settings['TABLE']
             try:
                 self.cursor.execute(query)
-            except pyodbc.Error as error:
-                self.error(query, 'ОШИБКА ПОЛУЧЕНИЯ НОМЕРА ПЕРИОДА', error)
+            except pyodbc.Error as err:
+                msg = "Ошибка проверки наличия данных в БД ({0}, {1}, err_text='{2}')".format(
+                    customer, register, err
+                )
+                self.message.append(msg)
             else:
-                sql_id = self.cursor.fetchone().mpid
-                if sql_id is None:
-                    self.period_id = 1
-                else:
-                    self.period_id = int(sql_id) + 1
+                self.check = CheckTup(*self.cursor.fetchall()[0])
 
     def insert_values(self, data_list):
-        """Метод получет список данных и добваляет его в таблицу БД."""
+        """Запись данных в БД."""
         query = "INSERT INTO %s VALUES (?,?,?,?,?,?,?)" % self.settings['TABLE']
         try:
             self.cursor.executemany(query, data_list)
-        except pyodbc.Error as error:
-            self.error(query, 'ОШИБКА ЗАПИСИ В БД', error)
+        except pyodbc.Error as err:
+            msg = "Ошибка загрузки данных в БД (запрос='{0}', err_text='{1}')".format(query, err)
+            self.message.append(msg)
         else:
             self.connection.commit()

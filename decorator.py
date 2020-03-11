@@ -6,32 +6,23 @@ from selenium.webdriver.support import expected_conditions as EC
 
 
 def deco_page(page):
-    """
-    Параметризованный декоратор для проверки загруки страницы.
-
-    Декоратор принимает url страницы
-    Если во время загрузки возникает исключение - метод не выполняется
-    """
+    """Параметризованный декоратор для проверки загруки страницы."""
     def decorator(method):
         def wrapper(self):
             try:
                 self.driver.get(page)
             except (TimeoutException, InvalidArgumentException) as error:
-                self.error(page, 'ОШИБКА ЗАГРУЗКИ СТРАНИЦЫ', error)
+                customer = self.settings['PASRER']['CUSTOMER']
+                msg = "Страница {0} не загружена ({1})".format(page, customer)
+                self.message.append(msg)
             else:
                 method(self)
         return wrapper
     return decorator
 
 
-def deco_tags(page, tags):
-    """
-    Параметризованный декоратор для проверки загруки страницы.
-
-    Декоратор принимает url страницы и блок тегов DOM
-    Если один из элементов не загружен за отведенное время генерируется исключение
-    Аргумент page передаётся для занесения url в данные об исключении
-    """
+def deco_tags(tags):
+    """Параметризованный декоратор для проверки загруки ключевых элементов DOM."""
     def decorator(method):
         def wrapper(self):
             try:
@@ -40,7 +31,10 @@ def deco_tags(page, tags):
                         EC.visibility_of_element_located((By.CSS_SELECTOR, tag))
                     )
             except TimeoutException as error:
-                self.error(page, 'ОШИБКА ЗАГРУЗКИ ТЕГОВ DOM', error)
+                customer = self.settings['PARSER']['CUSTOMER']
+                page = self.driver.current_url
+                msg = "Ключевые теги страницы {0} не загружены ({1})".format(page, customer)
+                self.message.append(msg)
             else:
                 method(self)
         return wrapper

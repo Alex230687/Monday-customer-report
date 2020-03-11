@@ -5,21 +5,18 @@ from selenium.webdriver.common.desired_capabilities import DesiredCapabilities a
 
 
 class Driver:
-    """Класс Driver."""
+    """
+    Класс Driver.
+
+    set_options() / set_capabilities() - установка дополнительный настроек
+    __call__ - запуск драйвера
+    """
 
     def __init__(self, settings):
         """
-        Конуструктор принимает блок настроек settings.
+        Конуструктор класса Driver.
 
-        :param settings: словарь с базовыми настройками драйвера
-            PATH - пусть к файлу драйвера chromedriver.exe
-            SPEED - параметр для pageLoadStrategy
-            DOWNLOAD - директория сохранения файлов
-
-        Атрибуты:
-            settings - блок настроек
-            driver_options - настройки драйвера
-            driver_capabilites - доп.возможности драйвера
+        Принимает блок настроек драйвера ['DRIVER']
         """
         self.settings = settings
         self.driver_options = ChromeOptions()
